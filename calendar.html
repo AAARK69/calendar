@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>2026 Pro-Accessibility Calendar</title>
+    <style>
+        :root { --blue: #0072B2; --orange: #D55E00; --bg: #f4f4f9; --card: #ffffff; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); padding: 20px; color: #333; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: var(--card); padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .controls button { padding: 8px 12px; cursor: pointer; border: 1px solid #ddd; border-radius: 4px; background: white; font-weight: bold; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        .month { background: var(--card); padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); position: relative; }
+        h2 { text-align: center; margin-top: 0; text-transform: uppercase; font-size: 1.1em; letter-spacing: 1px; }
+        .days-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+        .day-header { text-align: center; font-weight: bold; font-size: 0.7em; color: #888; padding-bottom: 5px; }
+        .day { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid #eee; cursor: pointer; border-radius: 4px; font-size: 0.85em; position: relative; transition: 0.1s; }
+        .day:hover { background-color: #f9f9f9; }
+        .weekend { background-color: #fcfcfc; border-color: #e0e0e0; }
+        .today { border: 2px solid #333 !important; font-weight: bold; }
+        .empty { border: none; cursor: default; }
+        .status-icon { font-size: 0.7em; margin-top: 2px; }
+        .stats { font-size: 0.75em; margin-top: 10px; color: #666; text-align: right; border-top: 1px solid #eee; padding-top: 5px; }
+        
+        /* High-Contrast States */
+        .color-a { background-color: var(--blue) !important; color: white; border-color: #004e7a; }
+        .color-b { background-color: var(--orange) !important; color: white; border-color: #a34800; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div>
+        <h1 style="margin:0; font-size: 1.5em;">2026 Tracking</h1>
+        <div id="goal-tracker" style="font-size: 0.9em; color: #666;">Goal Progress: 0 days</div>
+    </div>
+    <div class="controls">
+        <button onclick="exportData()">Export JSON</button>
+        <button onclick="importData()">Import JSON</button>
+        <button onclick="resetAll()" style="color: #d32f2f;">Reset All</button>
+    </div>
+</header>
+
+<div class="calendar-grid" id="calendar"></div>
+
+<script>
+const months = [
+    { name: "January", days: 31, start: 4 }, { name: "February", days: 28, start: 0 }, 
+    { name: "March", days: 31, start: 0 }, { name: "April", days: 30, start: 3 },
+    { name: "May", days: 31, start: 5 }, { name: "June", days: 30, start: 1 },
+    { name: "July", days: 31, start: 3 }, { name: "August", days: 31, start: 6 },
+    { name: "September", days: 30, start: 2 }, { name: "October", days: 31, start: 4 },
+    { name: "November", days: 30, start: 0 }, { name: "December", days: 31, start: 2 }
+];
+
+const dayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const today = new Date();
+const is2026 = today.getFullYear() === 2026;
+
+function init() {
+    const calendarEl = document.getElementById('calendar');
+    calendarEl.innerHTML = '';
+    let totalScore = 0;
+
+    months.forEach((m, mIdx) => {
+        const mContainer = document.createElement('div');
+        mContainer.className = 'month';
+        mContainer.innerHTML = `<h2>${m.name}</h2><div class="days-grid"></div><div class="stats" id="stats-${mIdx}">0% Positive</div>`;
+        const grid = mContainer.querySelector('.days-grid');
+
+        dayLabels.forEach(label => {
+            const div = document.createElement('div');
+            div.className = 'day-header';
+            div.innerText = label;
+            grid.appendChild(div);
+        });
+
+        for (let i = 0; i < m.start; i++) {
+            const empty = document.createElement('div');
+            empty.className = 'day empty';
+            grid.appendChild(empty);
+        }
+
+        let positiveDays = 0;
+        for (let d = 1; d <= m.days; d++) {
+            const day = document.createElement('div');
+            const dayId = `day-2026-${mIdx}-${d}`;
+            const status = localStorage.getItem(dayId) || "";
+            const isWeekend = (m.start + d - 1) % 7 === 0 || (m.start + d - 1) % 7 === 6;
+            const isToday = is2026 && today.getMonth() === mIdx && today.getDate() === d;
+
+            day.className = `day ${status} ${isWeekend ? 'weekend' : ''} ${isToday ? 'today' : ''}`;
+            day.innerHTML = `<span>${d}</span><span class="status-icon"></span>`;
+            if (status === 'color-a') { positiveDays++; totalScore++; }
+            updateIcon(day, status);
+
+            day.onclick = function() {
+                let newStatus = "";
+                if (this.classList.contains('color-a')) newStatus = "color-b";
+                else if (this.classList.contains('color-b')) newStatus = "";
+                else newStatus = "color-a";
+
+                localStorage.setItem(dayId, newStatus);
+                this.className = `day ${newStatus} ${isWeekend ? 'weekend' : ''} ${isToday ? 'today' : ''}`;
+                updateIcon(this, newStatus);
+                init(); // Refresh stats
+            };
+            
+            day.title = localStorage.getItem(dayId + "-note") || "Double-click to add note";
+            day.ondblclick = function(e) {
+                e.stopPropagation();
+                const note = prompt("Enter note for this day:", this.title === "Double-click to add note" ? "" : this.title);
+                if (note !== null) {
+                    localStorage.setItem(dayId + "-note", note);
+                    this.title = note;
+                }
+            };
+
+            grid.appendChild(day);
+        }
+        mContainer.querySelector(`#stats-${mIdx}`).innerText = `${Math.round((positiveDays / m.days) * 100)}% Positive`;
+        calendarEl.appendChild(mContainer);
+    });
+    document.getElementById('goal-tracker').innerText = `Annual Goal Progress: ${totalScore} Blue Days`;
+}
+
+function updateIcon(el, status) {
+    const iconEl = el.querySelector('.status-icon');
+    if (status === 'color-a') iconEl.innerText = '✓';
+    else if (status === 'color-b') iconEl.innerText = '✕';
+    else iconEl.innerText = '';
+}
+
+function exportData() {
+    const data = JSON.stringify(localStorage);
+    const blob = new Blob([data], {type: "application/json"});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = "calendar_backup_2026.json";
+    a.click();
+}
+
+function importData() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.onchange = e => {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = () => {
+            const data = JSON.parse(reader.result);
+            Object.keys(data).forEach(k => localStorage.setItem(k, data[k]));
+            init();
+        };
+        reader.readAsText(file);
+    };
+    input.click();
+}
+
+function resetAll() {
+    if (confirm("Are you sure you want to clear every mark and note?")) {
+        localStorage.clear();
+        init();
+    }
+}
+
+init();
+</script>
+</body>
+</html>
